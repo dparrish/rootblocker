@@ -32,7 +32,7 @@ func createMetrics(config *autoconfig.Config) {
 
 		// Export to Stackdriver.
 		trace.RegisterExporter(sdExporter)
-		//trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
+		trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
 	}
 
 	// Export prometheus style metrics

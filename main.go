@@ -40,6 +40,7 @@ type RootBlocker struct {
 	sync.RWMutex
 
 	e       *elastic.Client
+	router  *EdgeRouter
 	config  *autoconfig.Config
 	match   *regexp.Regexp
 	indices []string
@@ -52,7 +53,7 @@ func (r *RootBlocker) runQuery(ctx context.Context, lastTimestamp time.Time) (*e
 
 	boolQuery := elastic.NewBoolQuery().Filter(
 		elastic.NewQueryStringQuery(fmt.Sprintf("message: %q", r.config.Get("elasticsearch.match"))),
-		elastic.NewBoolQuery().Filter(elastic.NewRangeQuery("@timestamp").Gte(lastTimestamp.Format(dateFormat))),
+		elastic.NewBoolQuery().Filter(elastic.NewRangeQuery("@timestamp").Gte(lastTimestamp.Add(1*time.Millisecond).Format(dateFormat))),
 	)
 
 	ctx, searchSpan := trace.StartSpan(ctx, fmt.Sprintf("rootblocker elasticsearch Search"))
@@ -122,10 +123,10 @@ func (r *RootBlocker) tail(ctx context.Context) error {
 				r.RUnlock()
 
 				if ok {
-					log.Debugf("Found existing IP %s", ip)
+					log.Infof("Found existing IP %s", ip)
 					i.lastSeen = ts
 					i.count++
-					if !i.banned.IsZero() && time.Since(i.banned) > 10*time.Second {
+					if !i.banned.IsZero() && time.Since(i.banned) > 1*time.Minute {
 						log.Errorf("IP %s continues to be seen after being banned %s ago", i.ip, time.Since(i.banned))
 					}
 				} else {
@@ -139,7 +140,7 @@ func (r *RootBlocker) tail(ctx context.Context) error {
 					r.Unlock()
 				}
 			}
-			log.Debugf("Processed %d messages", len(res.Hits.Hits))
+			log.Infof("Processed %d messages", len(res.Hits.Hits))
 			metrics.MessagesProcessed.Inc(int64(len(res.Hits.Hits)))
 			r.updateBans(ctx)
 		}()
@@ -177,27 +178,45 @@ func (r *RootBlocker) updateBans(ctx context.Context) {
 	r.Lock()
 	defer r.Unlock()
 	log.Debugf("Updating bans")
-	var banned, count int64
+	var banned, count, updates int64
 
 	for _, i := range r.ips {
+		ip := i.ip.String()
+
 		count++
 		if !i.banned.IsZero() {
-			log.Debugf("%s is already banned", i.ip.String())
+			log.Debugf("%s is already banned", ip)
 			banned++
 			continue
 		}
 		if i.count < r.config.GetInt("threshold") {
-			log.Debugf("%s has only been seen %d times (<%d)", i.ip.String(), i.count, r.config.GetInt("threshold"))
+			log.Debugf("%s has only been seen %d times (<%d)", ip, i.count, r.config.GetInt("threshold"))
 			continue
 		}
-		log.Infof("%s has been seen %d times, banning", i.ip.String(), i.count)
+		log.Infof("%s has been seen %d times, banning", ip, i.count)
 
-		_, searchSpan := trace.StartSpan(ctx, fmt.Sprintf("rootblocker updateBans"))
+		_, searchSpan := trace.StartSpan(ctx, fmt.Sprintf("rootblocker updateBan"))
 		defer searchSpan.End()
+		if updates == 0 {
+			if err := r.router.Connect(ctx); err != nil {
+				log.Fatalf("Error connecting to router: %v", err)
+			}
+			defer r.router.Close()
+		}
+		updates++
 		i.banned = time.Now()
+		if err := r.router.AddIP(ctx, ip); err != nil {
+			log.Fatalf("Error banning %q: %v", ip, err)
+		}
 	}
 	metrics.BanListBans.Set(banned)
 	metrics.BanListCount.Set(count)
+
+	if updates > 0 {
+		if err := r.router.Commit(ctx); err != nil {
+			log.Fatalf("Error commiting configuration: %v", err)
+		}
+	}
 }
 
 func (r *RootBlocker) run(ctx context.Context) {
@@ -232,6 +251,17 @@ func (r *RootBlocker) run(ctx context.Context) {
 		return nil
 	})
 	log.Debugf("Using %d indices: %v", len(r.indices), r.indices)
+
+	if err := r.router.Connect(ctx); err != nil {
+		log.Fatalf("Error connecting to router: %v", err)
+	}
+	if err := r.router.Clear(ctx); err != nil {
+		log.Fatalf("Error clearing ruleset: %v", err)
+	}
+	if err := r.router.Commit(ctx); err != nil {
+		log.Fatalf("Error commiting configuration: %v", err)
+	}
+	r.router.Close()
 
 	go r.tail(ctx)
 
@@ -280,7 +310,7 @@ func findLastIndex(indices []string, indexPattern string) string {
 
 func main() {
 	flag.Parse()
-	log.SetReportCaller(true)
+	//log.SetReportCaller(true)
 
 	// Load the configuration.
 	config := autoconfig.New(*configFile)
@@ -309,6 +339,9 @@ func main() {
 		e:      client,
 		config: config,
 		ips:    make(map[string]*ipMatch),
+		router: &EdgeRouter{
+			config: config,
+		},
 	}
 	go r.run(context.Background())
 

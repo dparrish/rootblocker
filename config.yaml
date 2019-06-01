@@ -6,3 +6,8 @@ elasticsearch:
 timeout: 1h
 threshold: 5
 stackdriver_project: "dparrish-com"
+edgerouter:
+  ip_port: 192.168.1.1:22
+  ssh_key: /home/dparrish/.ssh/id_ecdsa
+  user: dparrish
+  address-group: rootblocker
