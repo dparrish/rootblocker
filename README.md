@@ -1,4 +1,6 @@
-# rootblocker
+[![Build Status](https://travis-ci.com/dparrish/rootblocker.svg?branch=master)](https://travis-ci.com/dparrish/rootblocker)
+
+# RootBlocker
 
 Block IPs that continuously fail root SSH attempts.
 
