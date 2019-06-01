@@ -227,7 +227,7 @@ func (r *RootBlocker) run(ctx context.Context) {
 	var err error
 	r.match, err = regexp.Compile(r.config.Get("elasticsearch.match"))
 	if err != nil {
-		log.Fatal("Invalid initial match regexp: %v", err)
+		log.Fatalf("Invalid initial match regexp: %v", err)
 	}
 
 	r.config.AddValidator(func(old, new *autoconfig.Config) error {
@@ -330,7 +330,7 @@ func main() {
 
 	client, err := elastic.NewSimpleClient(elastic.SetURL(config.Get("elasticsearch.url")))
 	if err != nil {
-		log.Fatal("Can't create elastic client: %v", err)
+		log.Fatalf("Can't create elastic client: %v", err)
 	}
 
 	createMetrics(config)
