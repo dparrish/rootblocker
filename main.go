@@ -52,7 +52,7 @@ func (r *RootBlocker) runQuery(ctx context.Context, lastTimestamp time.Time) (*e
 	defer r.RUnlock()
 
 	boolQuery := elastic.NewBoolQuery().Filter(
-		elastic.NewQueryStringQuery(fmt.Sprintf("message: %q", r.config.Get("elasticsearch.match"))),
+		elastic.NewQueryStringQuery(fmt.Sprintf("message:%q", "Failed password for")),
 		elastic.NewBoolQuery().Filter(elastic.NewRangeQuery("@timestamp").Gte(lastTimestamp.Add(1*time.Millisecond).Format(dateFormat))),
 	)
 
@@ -61,6 +61,7 @@ func (r *RootBlocker) runQuery(ctx context.Context, lastTimestamp time.Time) (*e
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
+	log.Debugf("Sending query message: %v", r.config.Get("elasticsearch.match"))
 	res, err := r.e.Search().Index(r.indices...).Sort("@timestamp", true).Query(boolQuery).From(0).Size(100).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Error in query: %v", err)
@@ -82,6 +83,13 @@ func (r *RootBlocker) tail(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(checkDuration):
+		}
+
+		i := r.selectIndices(r.config.Get("elasticsearch.index"))
+		if len(i) == 0 {
+			log.Warningf("No indices match %q, using old indices", r.config.Get("elasticsearch.index"))
+		} else {
+			r.indices = i
 		}
 
 		func() {
@@ -266,6 +274,7 @@ func (r *RootBlocker) run(ctx context.Context) {
 	go r.tail(ctx)
 
 	removeOldTicker := time.NewTicker(30 * time.Second)
+	updateBansTicker := time.NewTicker(1 * time.Hour)
 
 	for {
 		select {
@@ -273,6 +282,8 @@ func (r *RootBlocker) run(ctx context.Context) {
 			return
 		case <-removeOldTicker.C:
 			r.removeOld(ctx)
+		case <-updateBansTicker.C:
+			r.updateBans(ctx)
 		}
 	}
 }
@@ -311,6 +322,7 @@ func findLastIndex(indices []string, indexPattern string) string {
 func main() {
 	flag.Parse()
 	//log.SetReportCaller(true)
+	log.SetLevel(log.InfoLevel)
 
 	// Load the configuration.
 	config := autoconfig.New(*configFile)

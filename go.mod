@@ -6,6 +6,7 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	contrib.go.opencensus.io/exporter/stackdriver v0.12.1
 	github.com/dparrish/go-autoconfig v1.2.0
+	github.com/gogo/protobuf v1.2.0 // indirect
 	github.com/google/goexpect v0.0.0-20190516060327-b674c1c17d90
 	github.com/google/goterm v0.0.0-20190311235235-ce302be1d114 // indirect
 	github.com/kr/pretty v0.1.0 // indirect

@@ -1,7 +1,7 @@
 elasticsearch:
   url: "http://10.0.4.205:9200/"
-  index: "filebeat-7.1.*"
-  match: "Failed password for root from ([^ ]+)"
+  index: "syslog-*"
+  match: "Failed password for (?:root|invalid user [^ ]+) from ([^ ]+)"
   check_frequency: 1s
 timeout: 1h
 threshold: 5
