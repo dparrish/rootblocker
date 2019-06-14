@@ -15,7 +15,9 @@ import (
 	"github.com/dparrish/go-autoconfig"
 	"github.com/olivere/elastic/v7"
 	log "github.com/sirupsen/logrus"
+	"go.opencensus.io/plugin/ochttp"
 	"go.opencensus.io/stats"
+	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 )
 
@@ -365,10 +367,15 @@ func main() {
 	}
 	go r.run(context.Background())
 
+	h := &ochttp.Handler{}
+	if err := view.Register(ochttp.DefaultServerViews...); err != nil {
+		log.Fatal("Failed to register ochttp.DefaultServerViews")
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 	log.Infof("Listening on %s", port)
-	http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
+	http.ListenAndServe(fmt.Sprintf(":%s", port), h)
 }
