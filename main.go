@@ -21,6 +21,7 @@ import (
 
 var (
 	configFile = flag.String("config", "config.yaml", "Path to configuration file")
+	testMode   = flag.Bool("test", true, "Enable testing mode")
 
 	elasticClient *elastic.Client
 )
@@ -40,7 +41,7 @@ type RootBlocker struct {
 	sync.RWMutex
 
 	e       *elastic.Client
-	router  *EdgeRouter
+	router  Router
 	config  *autoconfig.Config
 	match   *regexp.Regexp
 	indices []string
@@ -351,9 +352,16 @@ func main() {
 		e:      client,
 		config: config,
 		ips:    make(map[string]*ipMatch),
-		router: &EdgeRouter{
+	}
+	if *testMode {
+		log.Infof("Running in test mode")
+		r.router = &TestRouter{}
+	} else {
+		log.Infof("Running in production mode")
+		return
+		r.router = &EdgeRouter{
 			config: config,
-		},
+		}
 	}
 	go r.run(context.Background())
 
