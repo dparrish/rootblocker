@@ -13,6 +13,7 @@ import (
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
+	"go.opencensus.io/zpages"
 )
 
 var metrics struct {
@@ -43,6 +44,7 @@ func createMetrics(config *autoconfig.Config) {
 	view.RegisterExporter(exporter)
 	view.SetReportingPeriod(5 * time.Second)
 	http.Handle("/metrics", exporter)
+	zpages.Handle(nil, "/debug")
 
 	registry := metric.NewRegistry()
 	metricproducer.GlobalManager().AddProducer(registry)
@@ -81,5 +83,4 @@ func createMetrics(config *autoconfig.Config) {
 		Measure:     metrics.MessagesPerSearch,
 		Aggregation: view.Distribution(0, 2<<0, 2<<1, 2<<2, 2<<3, 2<<4, 2<<5, 2<<6, 2<<7, 2<<8, 2<<9, 2<<10),
 	})
-
 }

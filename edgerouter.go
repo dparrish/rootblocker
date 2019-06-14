@@ -10,6 +10,7 @@ import (
 	"github.com/dparrish/go-autoconfig"
 	expect "github.com/google/goexpect"
 	log "github.com/sirupsen/logrus"
+	"go.opencensus.io/trace"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -23,6 +24,9 @@ type EdgeRouter struct {
 }
 
 func (e *EdgeRouter) Connect(ctx context.Context) error {
+	ctx, searchSpan := trace.StartSpan(ctx, fmt.Sprintf("EdgeRouter Connect"))
+	defer searchSpan.End()
+
 	key, err := ioutil.ReadFile(e.config.Get("edgerouter.ssh_key"))
 	if err != nil {
 		return fmt.Errorf("unable to read private key %q: %v", e.config.Get("edgerouter.ssh_key"), err)
@@ -66,6 +70,9 @@ func (e *EdgeRouter) Close() error {
 }
 
 func (e *EdgeRouter) Clear(ctx context.Context) error {
+	ctx, searchSpan := trace.StartSpan(ctx, fmt.Sprintf("EdgeRouter Clear"))
+	defer searchSpan.End()
+
 	if _, err := e.run(ctx, "delete firewall group address-group rootblocker address"); err != nil {
 		return fmt.Errorf("failed to clear ruleset: %v", err)
 	}
@@ -73,6 +80,9 @@ func (e *EdgeRouter) Clear(ctx context.Context) error {
 }
 
 func (e *EdgeRouter) AddIP(ctx context.Context, ip string) error {
+	ctx, searchSpan := trace.StartSpan(ctx, fmt.Sprintf("EdgeRouter AddIP"))
+	defer searchSpan.End()
+
 	if _, err := e.run(ctx, fmt.Sprintf("set firewall group address-group rootblocker address %s", ip)); err != nil {
 		return fmt.Errorf("failed to add IP: %v", err)
 	}
@@ -80,10 +90,19 @@ func (e *EdgeRouter) AddIP(ctx context.Context, ip string) error {
 }
 
 func (e *EdgeRouter) RemoveIP(ctx context.Context, ip string) error {
+	ctx, searchSpan := trace.StartSpan(ctx, fmt.Sprintf("EdgeRouter RemoveIP"))
+	defer searchSpan.End()
+
+	if _, err := e.run(ctx, fmt.Sprintf("delete firewall group address-group rootblocker address %s", ip)); err != nil {
+		return fmt.Errorf("failed to add IP: %v", err)
+	}
 	return nil
 }
 
 func (e *EdgeRouter) Commit(ctx context.Context) error {
+	ctx, searchSpan := trace.StartSpan(ctx, fmt.Sprintf("EdgeRouter Commit"))
+	defer searchSpan.End()
+
 	if _, err := e.run(ctx, "commit"); err != nil {
 		return fmt.Errorf("failed to commit: %v", err)
 	}
