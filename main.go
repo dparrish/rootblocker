@@ -360,7 +360,6 @@ func main() {
 		r.router = &TestRouter{}
 	} else {
 		log.Infof("Running in production mode")
-		return
 		r.router = &EdgeRouter{
 			config: config,
 		}
